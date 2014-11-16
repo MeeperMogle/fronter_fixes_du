@@ -1,7 +1,8 @@
 // ==UserScript==
 // @name       Fronter Fixes (Dalarna University)
 // @namespace  https://github.com/MeeperMogle
-// @version    0.1
+// @version    0.2
+// @changes    0.2: New function: Saving direct links to folders via checkboxes, for faster access later.
 // @changes    0.1: First beta release. Custom Rum-names. Removes "Radera"-button to prevent accidents...
 // @description  Meant to make the life easier for students of Dalarna University when dealing with the Fronter platform.
 // @match      https://fronter.com/hda/*
@@ -24,7 +25,7 @@
  * 
  * - Change course-code Rum-links to human readable. (Maintained manually, see next comment-section)
  * - Removes the "Radera"-button (Delete) on signup-forms, which is scarily closes to "Redigera" (Edit)...
- *
+ * - (New) Save direct links to folders within the depths of Fronter - get there in no time through the new Dashboard!
  */
 
 /*
@@ -163,16 +164,208 @@ function courseLinkNameChange(linksCommonClassName, hideSomeRooms){
     }
 }
 
-// Rum-button
+// We will be doing some storing in localStorage.
+// This variable control the stored data (no sensitive data is stored!)
+// and is populated via the below function.
+var links;
+function getStoredThings(){
+    links = localStorage.getItem('fronter_fixes_links');
+    
+    if(!links){
+        links = ":";
+        saveStoredThings();
+    }
+}
+
+// Save the links to storage
+function saveStoredThings(){
+    localStorage.setItem('fronter_fixes_links', links);
+}
+
+// Add a link
+function addLink(id,name){
+    // Take away some anoying elements of the name
+    name = name.replace(/&nbsp;/gi,"");
+
+    // Check that it's not already Saved, then add it.
+    if(links.indexOf(id+":"+name) == -1){
+        if(links != ":")
+            links += "," + id+":"+name;
+        else
+            links = id+":"+name;
+    }
+    
+    // Save and re-load the new list of links
+    saveStoredThings();
+    getStoredThings();
+}
+// Remove a link from the list
+function removeLink(id,name){
+    // Different ways of deletion depending on where
+    // in the list the one we want deleted is.
+    // It'll be deleted in one way or another.
+    if(links.indexOf("," + id+":"+name) != -1){
+        links = links.replace("," + id+":"+name,"");
+    } else if(links.indexOf(id+":"+name+",") != -1){
+        links =  links.replace(id+":"+name+",","");
+    } else if(links.indexOf(id+":"+name) != -1){
+        links =  links.replace(id+":"+name,"");
+    } else{
+        
+    }
+    
+    // Save and re-load the new list of links
+    saveStoredThings();
+    getStoredThings();
+}
+
+// Rum-list frame.
 if(location.href == "https://fronter.com/hda/personalframe.phtml"){
+    // Apply the function to translate the course-codes.
+    // The common class name for the links in this list is currently "room-list-link"
     courseLinkNameChange("room-list-link", true);
 }
 // Alla rum-view
 else if(location.href.indexOf("https://fronter.com/hda/adm/projects.phtml") != -1){
+    // Apply the function to translate the course-codes.
+    // The common class name for the links in this list is currently "black-link"
     courseLinkNameChange("black-link", false);
 }
-    // Remove the "Radera"-button
+    // Add checkboxes to folders in the directory tree.
+    else if(location.href.indexOf("https://fronter.com/hda/links/structureprops.phtml?treeid=") != -1
+           || location.href.indexOf("https://fronter.com/hda/links/structureprops.phtml?temp=temp&init_load=1") != -1){
+        getStoredThings();
+        
+        // Extensive selector to make sure that we
+        // - select all folders
+        // - don't select any kind of file, forum, discussion, note or anything else.
+        // This function is built for folders, nothing else should have checkboxes.
+        $('a.black-link[href*="structureprops.phtml"]').not('[href*="contacts"]').each(function(){
+            // Find the ID and Name of the folder.
+            var id = $(this).attr('href').substring($(this).attr('href').lastIndexOf('=')+1);
+            var name = $(this).html().replace(/&nbsp;/gi,"");
+            
+            // Add a checkbox to the folder
+            $(this).parent().append(' - Saved <input type=checkbox id=store_' + id + '>');
+            
+            // If the folder is already saved, tick the checkbox.
+            // We need to know that we are looking at a saved folder.
+            if(links.indexOf(id+":"+name) != -1)
+                $('#store_' + id).prop('checked',true);
+            
+            // When the checkbox is clicked...
+            $('#store_' + id).click(function(){
+                // Get up-to-date version of saved links
+                getStoredThings();
+                
+                // If we just turned it to [X]
+                if(this.checked){
+                    // Add the folder to our list of saved folders
+                    addLink(id,name);
+                }
+                // If we just turned it to []
+                else{
+                    // Remove the folder from our list of saved folders
+                    removeLink(id,name);
+                }
+            });
+        });
+    }
+    
+    
+    // Remove the "Radera"-button which appears on some shared documents.
+    // The problem is that the "Radera" (Delete) button is next to the "Redigera" (Edit) button.
+    // To prevent accidental clicking of Radera when we want to Redigera, we remove the Radera button.
     else if(document.location.href.indexOf("https://fronter.com/hda/bwwrite/index.phtml?post_keeper_id=") != -1){
         $('a[onclick*="ta bort"]:contains("Radera")').siblings('img').remove();
         $('a[onclick*="ta bort"]:contains("Radera")').hide();
     }
+        // On the main page, outside all of the frames.
+        // Here we want to add access to the Dashboard, so that's accessible from any page.
+        else if(location.href=="https://fronter.com/hda/main.phtml"){
+            
+            // Button to show & hide the settings which we will soon create
+            $('#banner-container').prepend("<div id=showButton></div>");
+            $('#showButton').css('position','absolute').css('left','40%').css('margin-top','28px');
+            $('#showButton').append("<span class=toClose>Close => </span> <input type=submit value='Fixes Dashboard' id=customButton1> <span class=toClose> <= Close</span>");
+            $('.toClose').css('font-weight','bold').css('visibility','hidden');
+            
+            // When to Fixes Dashboard-button is pressed...
+            $('#showButton').click(function(){
+                // If the Dashboard is currently hidden,
+                if($('#ourDashboard').css('display') == 'none'){
+                    // show the dashboard.
+                    $('#ourDashboard').show();
+                    $('.toClose').css('visibility','visible');
+                    
+                    // Fetch an up-to-date lit of our saved links
+                    getStoredThings();
+                    
+                    // Add some information to the Dashboard
+                    $('#ourDashboard').append("<h2>Fronter Fixes Dashboard (<a href='https://github.com/MeeperMogle/fronter_fixes_du' target=_githubFronter>Homepage</a>)</h2>");
+                    $('#ourDashboard').append("<h3>Saved direct links</h3>");
+                    $('#ourDashboard').append("By ticking boxes next to folders, direct links to them will show up here.<br>");
+                    $('#ourDashboard').append("By using this feature you can quickly get to important folders with few clicks.<p>");
+                    
+                    // Fetck an array of all our separated, saved, links for easy management.
+                    var splitLinks = links.split(",");
+                    
+                    // Loop through them.
+                    for(i=0; i<splitLinks.length; i++){
+                        // If it's not empty for some reason, we work with it.
+                        if(splitLinks[i].split(":")[0] != ""){
+                            // Fetch the ID and Name
+                            var id = splitLinks[i].split(":")[0];
+                            var name = splitLinks[i].split(":")[1];
+                            
+                            // Start building a link to the folder.
+                            var codeToAdd = '<a href="https://fronter.com/hda/links/structureprops.phtml?treeid=';
+                            codeToAdd += id;
+                            codeToAdd += '" target=_blank'+id+'>';
+                            codeToAdd += name;
+                            codeToAdd += '</a>';
+                            
+                            // For ease of use, we add a checkbox for un-saving the Folder directly from the Dashboard.
+                            codeToAdd += ' <input type=checkbox class="removersL" id="remove_' + id + ':' + name + '" checked><br>';
+                            
+                            // Add the link and checkbox to the Dashboard.
+                            $('#ourDashboard').append(codeToAdd);
+                            
+                            // Repeat for all the links!
+                        }
+                    }
+                    // If we click on one of the checkboxes,
+                    $('.removersL').click(function(){
+                        // fetch the corresponding ID and name.
+                        var id = $(this).attr('id').replace("remove_","").split(":")[0];
+                        var name = $(this).attr('id').replace("remove_","").split(":")[1];
+                        
+                        // If the box is nox [X]
+                        if(this.checked){
+                            // (Re) save it to the list of saved links
+                            addLink(id,name);
+                        }
+                        else{
+                            // Remove the folder from the list of saved links
+                            removeLink(id,name);
+                        }
+                        
+                        // This happens for any one of the checkboxes, meaning all of them will work.
+                    });
+                }
+                else{
+                    // If the Dashboard was currently visible, instead we want to hide it again.
+                    $('#ourDashboard').hide();
+                    $('.toClose').css('visibility','hidden');
+                    $('#ourDashboard').html('');
+                }
+                return false;
+            });
+            
+            // Visual properties of the Dashboard
+            $('#banner-container').prepend("<div id=ourDashboard style='display:none;'></div>");
+            $('#ourDashboard').css('position','absolute').css('left','1%').css('margin-top','50px').css('border-radius','20px');
+            $('#ourDashboard').css('width','90%').css('height','500px').css('background-color','white').css('border','1px solid black');
+            $('#ourDashboard').css('padding','20px');
+        }
+        
