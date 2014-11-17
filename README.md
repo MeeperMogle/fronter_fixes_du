@@ -6,6 +6,7 @@ Helpful improvements to the UI of Fronter. Designed for Dalarna University-Front
 Features
 - Change course-code Rum-links to human readable. (Maintained manually)
 - Removes the "Radera"-button (Delete) on signup-forms, which is scarily closes to "Redigera" (Edit)...
+- (NEW) Create direct, "Favourite" links to folders. Much less time clicking through folders.
 
 
 This script was made by and for students of the programme Digitalbrott och eSäkerhet.
